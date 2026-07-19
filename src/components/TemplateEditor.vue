@@ -1,7 +1,7 @@
 <template>
   <div class="template-editor">
     <div class="template-header">
-      <h3>Narration & Ledger Templates</h3>
+      <h3>{{ templateType === 'prepaid' ? 'Prepaid Narration Templates' : 'Narration & Ledger Templates' }}</h3>
       <button @click="showEditor = !showEditor" class="toggle-btn">
         {{ showEditor ? 'Collapse ▲' : 'Expand ▼' }}
       </button>
@@ -27,24 +27,39 @@
       <div v-if="selectedTemplateId === 'default'" class="default-preview">
         <p class="preview-hint">This is the built-in default. Create a custom template to edit.</p>
 
-        <div class="template-section">
-          <h4>Entry A — Interest</h4>
-          <pre>{{ defaultTemplate.narrations.entryA }}</pre>
-        </div>
-        <div class="template-section">
-          <h4>Entry A — With Calculation</h4>
-          <pre>{{ defaultTemplate.narrations.entryAWithCalc }}</pre>
-        </div>
-        <div class="template-section">
-          <h4>Entry B — Rollover</h4>
-          <pre>{{ defaultTemplate.narrations.entryB }}</pre>
-        </div>
-        <div class="template-section">
-          <h4>Ledger Names</h4>
-          <pre>Old Deposit:   {{ defaultTemplate.ledgerNames.oldDeposit }}
+        <!-- Rollover templates -->
+        <template v-if="templateType === 'rollover'">
+          <div class="template-section">
+            <h4>Entry A — Interest</h4>
+            <pre>{{ defaultTemplate.narrations.entryA }}</pre>
+          </div>
+          <div class="template-section">
+            <h4>Entry A — With Calculation</h4>
+            <pre>{{ defaultTemplate.narrations.entryAWithCalc }}</pre>
+          </div>
+          <div class="template-section">
+            <h4>Entry B — Rollover</h4>
+            <pre>{{ defaultTemplate.narrations.entryB }}</pre>
+          </div>
+          <div class="template-section">
+            <h4>Ledger Names</h4>
+            <pre>Old Deposit:   {{ defaultTemplate.ledgerNames.oldDeposit }}
 New Deposit:   {{ defaultTemplate.ledgerNames.newDeposit }}
 Interest Inc:  {{ defaultTemplate.ledgerNames.interestIncome }}</pre>
-        </div>
+          </div>
+        </template>
+
+        <!-- Prepaid templates -->
+        <template v-else-if="templateType === 'prepaid'">
+          <div class="template-section">
+            <h4>Full Month Narration</h4>
+            <pre>{{ defaultTemplate.narrations.fullMonth }}</pre>
+          </div>
+          <div class="template-section">
+            <h4>Partial Month Narration</h4>
+            <pre>{{ defaultTemplate.narrations.partialMonth }}</pre>
+          </div>
+        </template>
       </div>
 
       <!-- Custom template: editable -->
@@ -56,36 +71,52 @@ Interest Inc:  {{ defaultTemplate.ledgerNames.interestIncome }}</pre>
           </div>
         </div>
 
-        <div class="template-section">
-          <label>Entry A — Interest Narration</label>
-          <textarea v-model="editingTemplate.narrations.entryA" rows="3"></textarea>
-        </div>
-
-        <div class="template-section">
-          <label>Entry A — With Calculation</label>
-          <textarea v-model="editingTemplate.narrations.entryAWithCalc" rows="3"></textarea>
-        </div>
-
-        <div class="template-section">
-          <label>Entry B — Rollover Narration</label>
-          <textarea v-model="editingTemplate.narrations.entryB" rows="3"></textarea>
-        </div>
-
-        <div class="ledger-section">
-          <h4>Ledger Name Templates</h4>
-          <div class="form-group">
-            <label>Old Deposit Ledger</label>
-            <input type="text" v-model="editingTemplate.ledgerNames.oldDeposit">
+        <!-- Rollover editable fields -->
+        <template v-if="templateType === 'rollover'">
+          <div class="template-section">
+            <label>Entry A — Interest Narration</label>
+            <textarea v-model="editingTemplate.narrations.entryA" rows="3"></textarea>
           </div>
-          <div class="form-group">
-            <label>New Deposit Ledger</label>
-            <input type="text" v-model="editingTemplate.ledgerNames.newDeposit">
+
+          <div class="template-section">
+            <label>Entry A — With Calculation</label>
+            <textarea v-model="editingTemplate.narrations.entryAWithCalc" rows="3"></textarea>
           </div>
-          <div class="form-group">
-            <label>Interest Income Ledger</label>
-            <input type="text" v-model="editingTemplate.ledgerNames.interestIncome">
+
+          <div class="template-section">
+            <label>Entry B — Rollover Narration</label>
+            <textarea v-model="editingTemplate.narrations.entryB" rows="3"></textarea>
           </div>
-        </div>
+
+          <div class="ledger-section">
+            <h4>Ledger Name Templates</h4>
+            <div class="form-group">
+              <label>Old Deposit Ledger</label>
+              <input type="text" v-model="editingTemplate.ledgerNames.oldDeposit">
+            </div>
+            <div class="form-group">
+              <label>New Deposit Ledger</label>
+              <input type="text" v-model="editingTemplate.ledgerNames.newDeposit">
+            </div>
+            <div class="form-group">
+              <label>Interest Income Ledger</label>
+              <input type="text" v-model="editingTemplate.ledgerNames.interestIncome">
+            </div>
+          </div>
+        </template>
+
+        <!-- Prepaid editable fields -->
+        <template v-else-if="templateType === 'prepaid'">
+          <div class="template-section">
+            <label>Full Month Narration</label>
+            <textarea v-model="editingTemplate.narrations.fullMonth" rows="3"></textarea>
+          </div>
+
+          <div class="template-section">
+            <label>Partial Month Narration</label>
+            <textarea v-model="editingTemplate.narrations.partialMonth" rows="3"></textarea>
+          </div>
+        </template>
 
         <div class="template-actions">
           <button @click="saveTemplate" class="save-btn">Save Template</button>
@@ -99,66 +130,119 @@ Interest Inc:  {{ defaultTemplate.ledgerNames.interestIncome }}</pre>
           Available Placeholders {{ showPlaceholders ? '▲' : '▼' }}
         </h4>
         <div v-if="showPlaceholders" class="placeholder-list">
+          <!-- Common placeholders -->
           <div class="placeholder-item">
-            <code>{bank}</code>
-            <span>Bank name (e.g., Standard Chartered Bank)</span>
+            <code>{description}</code>
+            <span>Expense description (e.g., Insurance)</span>
           </div>
           <div class="placeholder-item">
-            <code>{oldRate}</code>
-            <span>Current period rate (e.g., 3.51)</span>
+            <code>{monthName}</code>
+            <span>Full month name (e.g., January)</span>
           </div>
           <div class="placeholder-item">
-            <code>{newRate}</code>
-            <span>Next period rate (e.g., 3.67)</span>
+            <code>{year}</code>
+            <span>Year (e.g., 2026)</span>
           </div>
           <div class="placeholder-item">
-            <code>{currency}</code>
-            <span>Currency code (e.g., USD)</span>
+            <code>{periodStart}</code>
+            <span>Period start date (e.g., 14-Jan-2026)</span>
           </div>
           <div class="placeholder-item">
-            <code>{openingBalance}</code>
-            <span>Opening balance, formatted with commas</span>
+            <code>{periodEnd}</code>
+            <span>Period end date (e.g., 31-Jan-2026)</span>
           </div>
           <div class="placeholder-item">
-            <code>{effectiveOpening}</code>
-            <span>Opening + additions - withdrawals</span>
+            <code>{startDate}</code>
+            <span>Contract start date</span>
           </div>
           <div class="placeholder-item">
-            <code>{interest}</code>
-            <span>Interest amount, formatted</span>
+            <code>{endDate}</code>
+            <span>Contract end date</span>
           </div>
           <div class="placeholder-item">
-            <code>{closingBalance}</code>
-            <span>Closing balance, formatted</span>
+            <code>{totalAmount}</code>
+            <span>Total contract amount, formatted</span>
           </div>
           <div class="placeholder-item">
-            <code>{days}</code>
-            <span>Number of days in period</span>
+            <code>{months}</code>
+            <span>Number of months in contract</span>
           </div>
           <div class="placeholder-item">
-            <code>{openingDate}</code>
-            <span>Period start date (e.g., 02-Jan-2026)</span>
+            <code>{monthlyAmount}</code>
+            <span>Amount per full month, formatted</span>
           </div>
           <div class="placeholder-item">
-            <code>{closingDate}</code>
-            <span>Period end date (e.g., 05-Jan-2026)</span>
+            <code>{daysInPeriod}</code>
+            <span>Days in this period</span>
           </div>
           <div class="placeholder-item">
-            <code>{nextDate}</code>
-            <span>Next period start date</span>
+            <code>{totalPartialDays}</code>
+            <span>Sum of days in all partial periods</span>
           </div>
           <div class="placeholder-item">
-            <code>{denominator}</code>
-            <span>Day count base (360, 365, or 366)</span>
+            <code>{amount}</code>
+            <span>Amount for this period, formatted</span>
           </div>
           <div class="placeholder-item">
-            <code>{addition}</code>
-            <span>Addition amount, formatted (if any)</span>
+            <code>{expenseLedger}</code>
+            <span>Expense ledger name</span>
           </div>
           <div class="placeholder-item">
-            <code>{withdrawal}</code>
-            <span>Withdrawal amount, formatted (if any)</span>
+            <code>{prepaidLedger}</code>
+            <span>Prepaid ledger name</span>
           </div>
+
+          <!-- Rollover-only placeholders -->
+          <template v-if="templateType === 'rollover'">
+            <div class="placeholder-item">
+              <code>{bank}</code>
+              <span>Bank name (e.g., Standard Chartered Bank)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{oldRate}</code>
+              <span>Current period rate (e.g., 3.51)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{newRate}</code>
+              <span>Next period rate (e.g., 3.67)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{currency}</code>
+              <span>Currency code (e.g., USD)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{openingBalance}</code>
+              <span>Opening balance, formatted with commas</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{interest}</code>
+              <span>Interest amount, formatted</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{closingBalance}</code>
+              <span>Closing balance, formatted</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{days}</code>
+              <span>Number of days in period</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{openingDate}</code>
+              <span>Period start date (e.g., 02-Jan-2026)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{closingDate}</code>
+              <span>Period end date (e.g., 05-Jan-2026)</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{nextDate}</code>
+              <span>Next period start date</span>
+            </div>
+            <div class="placeholder-item">
+              <code>{denominator}</code>
+              <span>Day count base (360, 365, or 366)</span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -168,21 +252,56 @@ Interest Inc:  {{ defaultTemplate.ledgerNames.interestIncome }}</pre>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { defaultTemplates, defaultLedgerTemplates, saveToStorage, loadFromStorage } from '../utils/helpers.js'
+import {
+  defaultTemplates, defaultLedgerTemplates,
+  defaultPrepaidTemplates,
+  saveToStorage, loadFromStorage
+} from '../utils/helpers.js'
+
+const props = defineProps({
+  templateType: {
+    type: String,
+    default: 'rollover' // 'rollover' or 'prepaid'
+  }
+})
 
 const emit = defineEmits(['template-changed'])
 
-// The default template (read-only)
-const defaultTemplate = {
-  id: 'default',
-  name: 'Default',
-  isDefault: true,
-  narrations: { ...defaultTemplates },
-  ledgerNames: { ...defaultLedgerTemplates }
-}
+// Storage key based on template type
+const storageKey = computed(() =>
+  props.templateType === 'prepaid' ? 'customPrepaidTemplates' : 'customNarrationTemplates'
+)
+
+// Build default template object based on type
+const defaultTemplate = computed(() => {
+  if (props.templateType === 'prepaid') {
+    return {
+      id: 'default',
+      name: 'Default',
+      isDefault: true,
+      narrations: { ...defaultPrepaidTemplates },
+      ledgerNames: {}
+    }
+  }
+  return {
+    id: 'default',
+    name: 'Default',
+    isDefault: true,
+    narrations: { ...defaultTemplates },
+    ledgerNames: { ...defaultLedgerTemplates }
+  }
+})
 
 // Custom templates from localStorage
-const customTemplates = ref(loadFromStorage('customNarrationTemplates', []))
+const customTemplates = ref(loadFromStorage(storageKey.value, []))
+
+// Watch for template type changes (when switching between tools)
+watch(storageKey, (newKey) => {
+  customTemplates.value = loadFromStorage(newKey, [])
+  selectedTemplateId.value = 'default'
+  editingTemplate.value = null
+  emit('template-changed', defaultTemplate.value)
+})
 
 // Currently selected template
 const selectedTemplateId = ref('default')
@@ -197,9 +316,9 @@ const showPlaceholders = ref(false)
 // The active template object (what the parent should use)
 const activeTemplate = computed(() => {
   if (selectedTemplateId.value === 'default') {
-    return defaultTemplate
+    return defaultTemplate.value
   }
-  return customTemplates.value.find(t => t.id === selectedTemplateId.value) || defaultTemplate
+  return customTemplates.value.find(t => t.id === selectedTemplateId.value) || defaultTemplate.value
 })
 
 // Emit the active template whenever it changes
@@ -218,7 +337,7 @@ watch(editingTemplate, (newVal) => {
 function onTemplateChange() {
   if (selectedTemplateId.value === 'default') {
     editingTemplate.value = null
-    emit('template-changed', defaultTemplate)
+    emit('template-changed', defaultTemplate.value)
   } else {
     const found = customTemplates.value.find(t => t.id === selectedTemplateId.value)
     if (found) {
@@ -236,11 +355,11 @@ function createNewTemplate() {
     id: newId,
     name: 'New Template',
     isDefault: false,
-    narrations: JSON.parse(JSON.stringify(defaultTemplate.narrations)),
-    ledgerNames: JSON.parse(JSON.stringify(defaultTemplate.ledgerNames))
+    narrations: JSON.parse(JSON.stringify(defaultTemplate.value.narrations)),
+    ledgerNames: JSON.parse(JSON.stringify(defaultTemplate.value.ledgerNames))
   }
   customTemplates.value.push(newTemplate)
-  saveToStorage('customNarrationTemplates', customTemplates.value)
+  saveToStorage(storageKey.value, customTemplates.value)
   selectedTemplateId.value = newId
   editingTemplate.value = JSON.parse(JSON.stringify(newTemplate))
   emit('template-changed', editingTemplate.value)
@@ -252,7 +371,7 @@ function saveTemplate() {
   const index = customTemplates.value.findIndex(t => t.id === editingTemplate.value.id)
   if (index > -1) {
     customTemplates.value[index] = JSON.parse(JSON.stringify(editingTemplate.value))
-    saveToStorage('customNarrationTemplates', customTemplates.value)
+    saveToStorage(storageKey.value, customTemplates.value)
     // Emit the saved version
     emit('template-changed', customTemplates.value[index])
   }
@@ -266,11 +385,11 @@ function deleteTemplate() {
   const index = customTemplates.value.findIndex(t => t.id === editingTemplate.value.id)
   if (index > -1) {
     customTemplates.value.splice(index, 1)
-    saveToStorage('customNarrationTemplates', customTemplates.value)
+    saveToStorage(storageKey.value, customTemplates.value)
   }
   selectedTemplateId.value = 'default'
   editingTemplate.value = null
-  emit('template-changed', defaultTemplate)
+  emit('template-changed', defaultTemplate.value)
 }
 </script>
 

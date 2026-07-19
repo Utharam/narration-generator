@@ -42,11 +42,6 @@
           <input type="number" v-model.number="initialBalance" step="0.01" placeholder="514858.98">
         </div>
 
-        <div class="form-group">
-          <label>Interest Income Ledger</label>
-          <input type="text" v-model="interestIncomeLedger" placeholder="Interest on SCB Roll Over Deposits">
-        </div>
-
         <div class="form-group checkbox-group">
           <label>
             <input type="checkbox" v-model="showCalculation">
@@ -69,7 +64,7 @@
     </section>
 
     <!-- === TEMPLATE EDITOR === -->
-<TemplateEditor @template-changed="onTemplateChanged" />
+    <TemplateEditor @template-changed="onTemplateChanged" />
 
     <!-- === HOLIDAY CALENDAR === -->
     <section class="card">
@@ -142,8 +137,6 @@
               <th>Days</th>
               <th>Rate (%)</th>
               <th>Opening</th>
-              <th>Addition</th>
-              <th>Withdrawal</th>
               <th>Interest</th>
               <th>Closing</th>
               <th></th>
@@ -171,26 +164,6 @@
                 >
               </td>
               <td class="mono">{{ formatCurrency(period.openingBalance, currencyCode, commaSystem) }}</td>
-              <td>
-                <input
-                  type="number"
-                  v-model.number="periodAdditions[period.fromDate]"
-                  step="0.01"
-                  class="table-input"
-                  placeholder="0"
-                  @click.stop
-                >
-              </td>
-              <td>
-                <input
-                  type="number"
-                  v-model.number="periodWithdrawals[period.fromDate]"
-                  step="0.01"
-                  class="table-input"
-                  placeholder="0"
-                  @click.stop
-                >
-              </td>
               <td class="mono highlight">{{ formatCurrency(period.interest, currencyCode, commaSystem) }}</td>
               <td class="mono highlight">{{ formatCurrency(period.closingBalance, currencyCode, commaSystem) }}</td>
               <td>
@@ -226,7 +199,7 @@
           </div>
           <div class="entry-row">
             <span class="dr-cr">Cr.</span>
-            <span class="ledger">{{ interestIncomeLedger }}</span>
+            <span class="ledger">{{ interestIncomeLedgerName() }}</span>
             <span class="amount">{{ formatCurrency(currentPeriod.interest, currencyCode, commaSystem) }}</span>
           </div>
         </div>
@@ -288,7 +261,6 @@ import {
 // ============================================
 const bankName = ref('Standard Chartered Bank')
 const initialBalance = ref(514858.98)
-const interestIncomeLedger = ref('Interest on Standard Chartered Bank Roll Over Deposits')
 const commaSystem = ref('international')
 const dayCountConvention = ref('360')
 const showCalculation = ref(true)
@@ -410,11 +382,9 @@ function getWeekdayName(dateStr) {
 }
 
 // ============================================
-// PERIOD DATA (keyed by fromDate for persistence)
+// PERIOD DATA (keyed by fromDate)
 // ============================================
 const periodRates = reactive({})
-const periodAdditions = reactive({})
-const periodWithdrawals = reactive({})
 const narrations = reactive({})
 
 // ============================================
@@ -430,15 +400,12 @@ const calculatedPeriods = computed(() => {
     const fromDate = workingDays.value[i]
     const toDate = workingDays.value[i + 1]
     const rate = periodRates[fromDate] || 0
-    const addition = Number(periodAdditions[fromDate]) || 0
-    const withdrawal = Number(periodWithdrawals[fromDate]) || 0
 
     const openingBalance = runningBalance
-    const effectiveOpening = openingBalance + addition - withdrawal
     const days = getDaysBetween(fromDate, toDate)
     const denominator = getDenominator(dayCountConvention.value, toDate)
-    const interest = calculateInterest(effectiveOpening, rate, days, dayCountConvention.value, toDate)
-    const closingBalance = effectiveOpening + interest
+    const interest = calculateInterest(openingBalance, rate, days, dayCountConvention.value, toDate)
+    const closingBalance = openingBalance + interest
 
     runningBalance = closingBalance
 
@@ -452,10 +419,7 @@ const calculatedPeriods = computed(() => {
       fromDate,
       toDate,
       rate,
-      addition,
-      withdrawal,
       openingBalance,
-      effectiveOpening,
       days,
       denominator,
       interest,
@@ -474,7 +438,7 @@ const currentPeriodIndex = ref(0)
 const currentPeriod = computed(() => calculatedPeriods.value[currentPeriodIndex.value])
 
 // ============================================
-// LEDGER NAMES
+// LEDGER NAMES (all from template)
 // ============================================
 function oldLedgerName(period) {
   return fillTemplate(activeTemplate.value.ledgerNames.oldDeposit, {
@@ -487,6 +451,12 @@ function newLedgerName(period) {
   return fillTemplate(activeTemplate.value.ledgerNames.newDeposit, {
     bank: bankName.value,
     newRate: period.nextRate
+  })
+}
+
+function interestIncomeLedgerName() {
+  return fillTemplate(activeTemplate.value.ledgerNames.interestIncome, {
+    bank: bankName.value
   })
 }
 
@@ -503,16 +473,13 @@ function generateNarrationA(period) {
     newRate: period.nextRate,
     currency: cc,
     openingBalance: formatNumber(period.openingBalance, cs),
-    effectiveOpening: formatNumber(period.effectiveOpening, cs),
     interest: formatNumber(period.interest, cs),
     closingBalance: formatNumber(period.closingBalance, cs),
     days: period.days,
     openingDate: formatDate(period.fromDate),
     closingDate: formatDate(period.toDate),
     nextDate: formatDate(period.nextDate),
-    denominator: period.denominator,
-    addition: period.addition ? formatNumber(period.addition, cs) : '',
-    withdrawal: period.withdrawal ? formatNumber(period.withdrawal, cs) : ''
+    denominator: period.denominator
   }
 
   const template = showCalculation.value
@@ -532,16 +499,13 @@ function generateNarrationB(period) {
     newRate: period.nextRate,
     currency: cc,
     openingBalance: formatNumber(period.openingBalance, cs),
-    effectiveOpening: formatNumber(period.effectiveOpening, cs),
     interest: formatNumber(period.interest, cs),
     closingBalance: formatNumber(period.closingBalance, cs),
     days: period.days,
     openingDate: formatDate(period.fromDate),
     closingDate: formatDate(period.toDate),
     nextDate: formatDate(period.nextDate),
-    denominator: period.denominator,
-    addition: period.addition ? formatNumber(period.addition, cs) : '',
-    withdrawal: period.withdrawal ? formatNumber(period.withdrawal, cs) : ''
+    denominator: period.denominator
   }
 
   return fillTemplate(activeTemplate.value.narrations.entryB, values)
@@ -575,11 +539,10 @@ function handleExport() {
 
     const date = formatDate(period.toDate)
     const oldLedger = oldLedgerName(period)
-    const interestLedger = interestIncomeLedger.value
+    const interestLedger = interestIncomeLedgerName()
     const narrationA = narrations[period.fromDate]?.A || ''
     const narrationB = narrations[period.fromDate]?.B || ''
 
-    // Entry A: Interest (always)
     rows.push({
       date,
       ledger: oldLedger,
@@ -595,7 +558,6 @@ function handleExport() {
       narration: narrationA
     })
 
-    // Entry B: Rollover (only if rate changed)
     if (period.rateChanged) {
       const newLedger = newLedgerName(period)
       rows.push({
@@ -709,7 +671,6 @@ h3 {
   cursor: pointer;
 }
 
-/* Currency adder */
 .currency-adder {
   margin-top: 15px;
 }
@@ -754,7 +715,6 @@ h3 {
   background: #eee;
 }
 
-/* Range selector */
 .range-selector {
   display: flex;
   gap: 20px;
@@ -782,7 +742,6 @@ h3 {
   background: #357abd;
 }
 
-/* Working days */
 .working-days-list {
   display: flex;
   flex-wrap: wrap;
@@ -842,7 +801,6 @@ h3 {
   color: #c62828;
 }
 
-/* Periods table */
 .periods-table-wrap {
   overflow-x: auto;
 }
@@ -918,7 +876,6 @@ h3 {
   font-weight: 700;
 }
 
-/* Narrations */
 .narration-block {
   margin-bottom: 20px;
   padding: 15px;
@@ -998,7 +955,6 @@ h3 {
   color: #e65100;
 }
 
-/* Export */
 .export-section {
   text-align: center;
 }

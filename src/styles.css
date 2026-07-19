@@ -1,12 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 * {
   box-sizing: border-box;
+}
+
+:root {
+  --bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #555;
+  --text-light: #999;
+  --border: #e0e0e0;
+  --border-light: #eee;
+  --accent-red: #d32f2f;
+  --accent-green: #2e7d32;
+  --accent-blue: #1976d2;
+  --hover-bg: #f8f9fa;
+  --input-bg: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.06);
+  --shadow-hover: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] {
+  --bg: #121212;
+  --card-bg: #1e1e1e;
+  --text: #e0e0e0;
+  --text-muted: #aaa;
+  --text-light: #777;
+  --border: #333;
+  --border-light: #2a2a2a;
+  --accent-red: #ef5350;
+  --accent-green: #66bb6a;
+  --accent-blue: #64b5f6;
+  --hover-bg: #2a2a2a;
+  --input-bg: #2a2a2a;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-hover: rgba(0, 0, 0, 0.5);
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f5f5;
-  color: #333;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
   line-height: 1.5;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+button {
+  font-family: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
 }
