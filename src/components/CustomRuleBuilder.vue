@@ -4,13 +4,16 @@
     <!-- === SAVED RULES === -->
     <section class="card">
       <h2>Custom Rule Builder</h2>
-      <p class="section-hint">Create your own recurring narration generator. Define placeholders, write a template, set repetition rules, and generate narrations for any period.</p>
+      <p class="section-hint">Create your own recurring narration generator. Define placeholders, write a template, set repetition rules, and generate narrations for any period. Supports batch mode for multiple entries per period.</p>
 
       <div class="rule-list" v-if="savedRules.length > 0">
         <div v-for="rule in savedRules" :key="rule.id" class="rule-item">
           <div class="rule-info">
             <span class="rule-name">{{ rule.name }}</span>
-            <span class="rule-meta">{{ rule.placeholders.length }} placeholders · {{ rule.repetition.frequency }}</span>
+            <span class="rule-meta">
+              {{ rule.placeholders.length }} placeholders · {{ rule.repetition.frequency }}
+              <span v-if="rule.batchRows && rule.batchRows.length > 0"> · {{ rule.batchRows.length }} batch rows</span>
+            </span>
           </div>
           <div class="rule-actions">
             <button @click="loadRule(rule)" class="small-btn">Load</button>
@@ -26,6 +29,7 @@
       <div class="rule-actions-bar">
         <button @click="createNewRule" class="primary-btn">+ Create New Rule</button>
         <button @click="loadExample" class="link-btn">Load Example (Insurance)</button>
+        <button @click="loadSalaryExample" class="link-btn">Load Example (Salary Batch)</button>
       </div>
     </section>
 
@@ -89,11 +93,11 @@
               <option value="monthNumber">Month no (01)</option>
             </select>
 
-            <input v-if="ph.type === 'number'" type="number" v-model.number="ph.value" step="0.01" placeholder="0">
+            <input v-if="ph.type === 'number' && !ph.isBatch" type="number" v-model.number="ph.value" step="0.01" placeholder="0">
 
             <input v-if="ph.type === 'currency'" type="text" v-model="ph.value" placeholder="USD" maxlength="4">
 
-            <input v-if="ph.type === 'text'" type="text" v-model="ph.value" placeholder="Value">
+            <input v-if="ph.type === 'text' && !ph.isBatch" type="text" v-model="ph.value" placeholder="Value">
 
             <template v-if="ph.type === 'calculation'">
               <input type="text" v-model="ph.formula" placeholder="12000/12 or {amount}*{rate}/100" class="formula-input">
@@ -103,9 +107,55 @@
                 <option value="both">Both (12,000/12 = 1,000.00)</option>
               </select>
             </template>
+
+            <label v-if="ph.type === 'number' || ph.type === 'text'" class="batch-toggle">
+              <input type="checkbox" v-model="ph.isBatch" @change="syncBatchRows">
+              <span class="batch-label">Batch</span>
+            </label>
           </div>
 
           <button @click="removePlaceholder(i)" class="remove-btn" title="Remove">×</button>
+        </div>
+      </div>
+
+      <!-- Batch Data Table -->
+      <div class="batch-section" v-if="batchPlaceholders.length > 0">
+        <div class="section-header">
+          <h4>Batch Data ({{ editingRule.batchRows.length }} rows)</h4>
+          <button @click="addBatchRow" class="small-btn">+ Add Row</button>
+        </div>
+        <p class="section-hint">Each row generates one narration per period. Useful for salary, multiple vendors, or any repeating entries with different values.</p>
+
+        <div class="batch-table-wrap" v-if="editingRule.batchRows.length > 0">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th class="row-num">#</th>
+                <th v-for="ph in batchPlaceholders" :key="ph.id">{{ ph.name }}</th>
+                <th class="row-action"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, rowIndex) in editingRule.batchRows" :key="rowIndex">
+                <td class="row-num">{{ rowIndex + 1 }}</td>
+                <td v-for="ph in batchPlaceholders" :key="ph.id">
+                  <input
+                    :type="ph.type === 'number' ? 'number' : 'text'"
+                    v-model="row[ph.name]"
+                    :step="ph.type === 'number' ? '0.01' : ''"
+                    :placeholder="ph.type === 'number' ? '0' : ''"
+                    class="batch-input"
+                  >
+                </td>
+                <td class="row-action">
+                  <button @click="removeBatchRow(rowIndex)" class="remove-btn" title="Remove row">×</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty-state">
+          <p>No batch rows. Click "+ Add Row" to add entries.</p>
         </div>
       </div>
 
@@ -179,6 +229,7 @@
             <tr>
               <th>#</th>
               <th>Date</th>
+              <th v-if="hasBatch">Row</th>
               <th>Narration</th>
             </tr>
           </thead>
@@ -186,6 +237,7 @@
             <tr v-for="(period, i) in generatedPeriods" :key="i">
               <td>{{ i + 1 }}</td>
               <td class="date-cell">{{ formatDate(period.date) }}</td>
+              <td v-if="hasBatch" class="row-cell">{{ period.rowLabel || '-' }}</td>
               <td class="narration-cell">{{ period.narration }}</td>
             </tr>
           </tbody>
@@ -233,6 +285,13 @@ const validPlaceholders = computed(() => {
   return editingRule.value.placeholders.filter((p, i) => p.name && isNameValid(p.name, i))
 })
 
+const batchPlaceholders = computed(() => {
+  if (!editingRule.value) return []
+  return editingRule.value.placeholders.filter(p => p.isBatch && p.name)
+})
+
+const hasBatch = computed(() => batchPlaceholders.value.length > 0 && editingRule.value?.batchRows?.length > 0)
+
 // ============================================
 // RULE CRUD
 // ============================================
@@ -242,6 +301,7 @@ function createNewRule() {
     name: '',
     commaSystem: 'international',
     placeholders: [],
+    batchRows: [],
     template: '',
     repetition: {
       frequency: 'monthly',
@@ -259,11 +319,40 @@ function loadExample() {
     name: 'Monthly Insurance',
     commaSystem: 'international',
     placeholders: [
-      { id: 'ph_1', name: 'month', type: 'date', dateFormat: 'monthName' },
-      { id: 'ph_2', name: 'year', type: 'date', dateFormat: 'year' },
-      { id: 'ph_3', name: 'amount', type: 'calculation', formula: '12000/12', displayMode: 'result' }
+      { id: 'ph_1', name: 'month', type: 'date', dateFormat: 'monthName', isBatch: false },
+      { id: 'ph_2', name: 'year', type: 'date', dateFormat: 'year', isBatch: false },
+      { id: 'ph_3', name: 'amount', type: 'calculation', formula: '12000/12', displayMode: 'result', isBatch: false }
     ],
+    batchRows: [],
     template: 'Being insurance expenses of {month} {year} ({amount})',
+    repetition: {
+      frequency: 'monthly',
+      trigger: 'last',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31'
+    }
+  }
+  generatedPeriods.value = []
+}
+
+function loadSalaryExample() {
+  editingRule.value = {
+    id: 'rule_' + Date.now(),
+    name: 'Monthly Salary Batch',
+    commaSystem: 'international',
+    placeholders: [
+      { id: 'ph_1', name: 'month', type: 'date', dateFormat: 'monthName', isBatch: false },
+      { id: 'ph_2', name: 'year', type: 'date', dateFormat: 'year', isBatch: false },
+      { id: 'ph_3', name: 'name', type: 'text', isBatch: true },
+      { id: 'ph_4', name: 'basic', type: 'number', isBatch: true },
+      { id: 'ph_5', name: 'da', type: 'calculation', formula: '{basic}*0.4', displayMode: 'result', isBatch: false }
+    ],
+    batchRows: [
+      { name: 'Ram', basic: 50000 },
+      { name: 'Sita', basic: 45000 },
+      { name: 'Lakshman', basic: 40000 }
+    ],
+    template: 'Being Salary for {month} {year} paid to {name} including Basic pay {basic}, DA {da}',
     repetition: {
       frequency: 'monthly',
       trigger: 'last',
@@ -276,6 +365,7 @@ function loadExample() {
 
 function loadRule(rule) {
   editingRule.value = JSON.parse(JSON.stringify(rule))
+  if (!editingRule.value.batchRows) editingRule.value.batchRows = []
   generatedPeriods.value = []
 }
 
@@ -314,33 +404,76 @@ function addPlaceholder() {
     id,
     name: '',
     type: 'text',
-    value: ''
+    value: '',
+    isBatch: false
   })
 }
 
 function removePlaceholder(index) {
+  const removed = editingRule.value.placeholders[index]
   editingRule.value.placeholders.splice(index, 1)
+  if (removed && removed.isBatch) {
+    syncBatchRows()
+  }
 }
 
 function onTypeChange(ph) {
   if (ph.type === 'date') {
     if (!ph.dateFormat) ph.dateFormat = 'full'
+    ph.isBatch = false
   } else if (ph.type === 'number') {
     if (ph.value === undefined || ph.value === '') ph.value = 0
   } else if (ph.type === 'currency') {
     if (!ph.value) ph.value = 'USD'
+    ph.isBatch = false
   } else if (ph.type === 'text') {
     if (!ph.value) ph.value = ''
   } else if (ph.type === 'calculation') {
     if (!ph.formula) ph.formula = ''
     if (!ph.displayMode) ph.displayMode = 'result'
+    ph.isBatch = false
   }
+  syncBatchRows()
+}
+
+// ============================================
+// BATCH ROW MANAGEMENT
+// ============================================
+function syncBatchRows() {
+  if (!editingRule.value) return
+  const batchNames = batchPlaceholders.value.map(p => p.name)
+  
+  editingRule.value.batchRows.forEach(row => {
+    batchNames.forEach(name => {
+      if (!(name in row)) {
+        row[name] = ''
+      }
+    })
+    // Remove keys that are no longer batch placeholders
+    Object.keys(row).forEach(key => {
+      if (!batchNames.includes(key)) {
+        delete row[key]
+      }
+    })
+  })
+}
+
+function addBatchRow() {
+  const newRow = {}
+  batchPlaceholders.value.forEach(p => {
+    newRow[p.name] = p.type === 'number' ? 0 : ''
+  })
+  editingRule.value.batchRows.push(newRow)
+}
+
+function removeBatchRow(index) {
+  editingRule.value.batchRows.splice(index, 1)
 }
 
 // ============================================
 // RESOLVE PLACEHOLDERS
 // ============================================
-function resolvePlaceholders(placeholders, periodDate, commaSystem) {
+function resolvePlaceholders(placeholders, periodDate, commaSystem, batchRow = null) {
   const rawValues = {}
   const displayValues = {}
 
@@ -353,14 +486,26 @@ function resolvePlaceholders(placeholders, periodDate, commaSystem) {
       rawValues[p.name] = formatted
       displayValues[p.name] = formatted
     } else if (p.type === 'number') {
-      rawValues[p.name] = p.value
-      displayValues[p.name] = formatNumber(p.value, commaSystem)
+      let value
+      if (p.isBatch && batchRow) {
+        value = Number(batchRow[p.name]) || 0
+      } else {
+        value = Number(p.value) || 0
+      }
+      rawValues[p.name] = value
+      displayValues[p.name] = formatNumber(value, commaSystem)
     } else if (p.type === 'currency') {
       rawValues[p.name] = p.value
       displayValues[p.name] = p.value
     } else if (p.type === 'text') {
-      rawValues[p.name] = p.value
-      displayValues[p.name] = p.value
+      let value
+      if (p.isBatch && batchRow) {
+        value = batchRow[p.name] || ''
+      } else {
+        value = p.value || ''
+      }
+      rawValues[p.name] = value
+      displayValues[p.name] = value
     }
   })
 
@@ -410,11 +555,29 @@ function generatePreview() {
   }
 
   const dates = generatePeriodDates(startDate, endDate, frequency, trigger)
-  const periods = dates.map(date => {
-    const values = resolvePlaceholders(editingRule.value.placeholders, date, editingRule.value.commaSystem)
-    const narration = fillTemplate(editingRule.value.template, values)
-    return { date, narration }
-  })
+  const periods = []
+  const useBatch = hasBatch.value
+
+  if (useBatch) {
+    // Batch mode: for each period, for each row
+    dates.forEach(date => {
+      editingRule.value.batchRows.forEach((row, rowIndex) => {
+        const values = resolvePlaceholders(editingRule.value.placeholders, date, editingRule.value.commaSystem, row)
+        const narration = fillTemplate(editingRule.value.template, values)
+        // Create row label from first text batch placeholder
+        const firstTextPh = batchPlaceholders.value.find(p => p.type === 'text')
+        const rowLabel = firstTextPh ? row[firstTextPh.name] : `Row ${rowIndex + 1}`
+        periods.push({ date, narration, rowLabel })
+      })
+    })
+  } else {
+    // Single mode: for each period
+    dates.forEach(date => {
+      const values = resolvePlaceholders(editingRule.value.placeholders, date, editingRule.value.commaSystem)
+      const narration = fillTemplate(editingRule.value.template, values)
+      periods.push({ date, narration })
+    })
+  }
 
   generatedPeriods.value = periods
 }
@@ -423,11 +586,15 @@ function generatePreview() {
 // CSV EXPORT
 // ============================================
 function exportCSV() {
-  const headers = ['Date', 'Narration']
+  const headers = hasBatch.value ? ['Date', 'Row', 'Narration'] : ['Date', 'Narration']
   const csvLines = [headers.join(',')]
 
   generatedPeriods.value.forEach(p => {
-    csvLines.push([formatDate(p.date), `"${p.narration}"`].join(','))
+    if (hasBatch.value) {
+      csvLines.push([formatDate(p.date), `"${p.rowLabel || ''}"`, `"${p.narration}"`].join(','))
+    } else {
+      csvLines.push([formatDate(p.date), `"${p.narration}"`].join(','))
+    }
   })
 
   const csvContent = csvLines.join('\n')
@@ -535,6 +702,7 @@ h4 {
   display: flex;
   gap: 15px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Form */
@@ -633,6 +801,7 @@ h4 {
 .ph-config {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .ph-config input,
@@ -656,6 +825,24 @@ h4 {
   border-color: var(--accent-blue);
 }
 
+.batch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.batch-toggle input {
+  margin: 0;
+}
+
+.batch-label {
+  font-weight: 600;
+}
+
 .remove-btn {
   background: none;
   border: none;
@@ -668,6 +855,80 @@ h4 {
 
 .remove-btn:hover {
   color: #c62828;
+}
+
+/* Batch table */
+.batch-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--hover-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.batch-section .section-header {
+  margin-bottom: 8px;
+}
+
+.batch-section .section-hint {
+  margin-bottom: 12px;
+  font-size: 0.8em;
+}
+
+.batch-table-wrap {
+  overflow-x: auto;
+}
+
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+  background: var(--card-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.batch-table th {
+  padding: 8px 10px;
+  background: var(--hover-bg);
+  border-bottom: 2px solid var(--border);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.batch-table td {
+  padding: 4px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.batch-table .row-num {
+  width: 40px;
+  text-align: center;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.batch-table .row-action {
+  width: 40px;
+  text-align: center;
+}
+
+.batch-input {
+  width: 100%;
+  padding: 6px 8px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 3px !important;
+  font-size: 0.9em;
+  font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.batch-input:focus {
+  outline: none;
+  border-color: var(--accent-blue) !important;
 }
 
 /* Template */
@@ -839,6 +1100,12 @@ h4 {
   color: var(--text-muted);
 }
 
+.row-cell {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .narration-cell {
   color: var(--text);
 }
@@ -876,6 +1143,11 @@ h4 {
 
   .ph-config {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .batch-toggle {
+    align-self: flex-start;
   }
 }
 </style>
