@@ -24,7 +24,7 @@
     </main>
 
     <footer>
-      <p>Created by Utharam</p>
+      <p>Created by <a href="https://utharam.github.io/" target="_blank" rel="noopener noreferrer" class="creator-link">Utharam</a></p>
       <p class="footer-sub">Built for accountants, by an accountant. Runs entirely in your browser. No data leaves your device.</p>
     </footer>
   </div>
@@ -149,6 +149,16 @@ footer p:first-child {
   font-weight: 600;
   color: var(--text-muted);
   font-size: 0.95em;
+}
+
+.creator-link {
+  color: var(--accent-blue);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.creator-link:hover {
+  text-decoration: underline;
 }
 
 .footer-sub {
